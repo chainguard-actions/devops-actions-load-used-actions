@@ -1,0 +1,53 @@
+name: Test basic usage - load used actions with default org
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REPOSITORY_OWNER: actions
+      GITHUB_REPOSITORY: actions/checkout
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: load-actions
+        uses: .
+        with:
+          organization: actions
+          PAT: ${{ github.token }}
+
+      - name: Assert actions-file output is set
+        env:
+          ACTIONS_FILE: ${{ steps.load-actions.outputs.actions-file }}
+        run: |
+          echo "actions-file output: $ACTIONS_FILE"
+          if [ -z "$ACTIONS_FILE" ]; then
+            echo "FAIL: actions-file output is empty"
+            exit 1
+          fi
+          echo "PASS: actions-file output is set to: $ACTIONS_FILE"
+
+      - name: Assert actions file exists in workspace
+        env:
+          ACTIONS_FILE: ${{ steps.load-actions.outputs.actions-file }}
+        run: |
+          FULL_PATH="$GITHUB_WORKSPACE/$ACTIONS_FILE"
+          echo "Checking for file at: $FULL_PATH"
+          if [ ! -f "$FULL_PATH" ]; then
+            echo "FAIL: actions file not found at $FULL_PATH"
+            exit 1
+          fi
+          echo "PASS: actions file exists"
+
+      - name: Assert actions file contains valid JSON
+        env:
+          ACTIONS_FILE: ${{ steps.load-actions.outputs.actions-file }}
+        run: |
+          FULL_PATH="$GITHUB_WORKSPACE/$ACTIONS_FILE"
+          echo "Contents of $FULL_PATH:"
+          cat "$FULL_PATH"
+          if ! python3 -c "import json, sys; json.load(open('$FULL_PATH'))" 2>/dev/null; then
+            echo "FAIL: actions file does not contain valid JSON"
+            exit 1
+          fi
+          echo "PASS: actions file contains valid JSON"
