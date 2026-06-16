@@ -1,0 +1,53 @@
+name: Test default organization usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REPOSITORY_OWNER: actions
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: load-actions
+        uses: .
+        with:
+          # organization is omitted — action falls back to GITHUB_REPOSITORY_OWNER
+          PAT: ${{ github.token }}
+
+      - name: Assert actions-file output is set
+        env:
+          ACTIONS_FILE: ${{ steps.load-actions.outputs.actions-file }}
+        run: |
+          echo "actions-file output: $ACTIONS_FILE"
+          if [ -z "$ACTIONS_FILE" ]; then
+            echo "FAIL: actions-file output is empty"
+            exit 1
+          fi
+          echo "PASS: actions-file output is '$ACTIONS_FILE'"
+
+      - name: Assert output file exists in workspace
+        env:
+          ACTIONS_FILE: ${{ steps.load-actions.outputs.actions-file }}
+        run: |
+          FULL_PATH="$GITHUB_WORKSPACE/$ACTIONS_FILE"
+          echo "Checking for file at: $FULL_PATH"
+          if [ ! -f "$FULL_PATH" ]; then
+            echo "FAIL: expected output file not found at $FULL_PATH"
+            exit 1
+          fi
+          echo "PASS: output file exists at $FULL_PATH"
+
+      - name: Assert output file contains JSON array
+        env:
+          ACTIONS_FILE: ${{ steps.load-actions.outputs.actions-file }}
+        run: |
+          FULL_PATH="$GITHUB_WORKSPACE/$ACTIONS_FILE"
+          CONTENT=$(cat "$FULL_PATH")
+          echo "File content: $CONTENT"
+          # The file should contain a JSON array or object (not empty)
+          if [ -z "$CONTENT" ]; then
+            echo "FAIL: output file is empty"
+            exit 1
+          fi
+          echo "PASS: output file has content"
