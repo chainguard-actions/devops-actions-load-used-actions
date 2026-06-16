@@ -1,15 +1,144 @@
-# devops-actions/load-used-actions
+# load-used-actions
 
-Load an overview of all used actions in a GitHub Organization (or user account)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/devops-actions/load-used-actions/badge)](https://api.securityscorecards.dev/projects/github.com/devops-actions/load-used-actions)
 
-Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/devops-actions/load-used-actions](https://github.com/devops-actions/load-used-actions).
+Load used actions from an entire organization, by calling the REST API with a Personal Access Token and loop through all workflows in all repositories in the user account or organization.
 
-## Versions
+The output is stored with the name `actions`, which can be retrieved in another action with `${{ steps.<step id>.outputs.actions }}`.
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v1.3.6 | [`v1.3.6`](https://github.com/chainguard-actions/devops-actions-load-used-actions/tree/v1.3.6) | [`49ad9cd`](https://github.com/devops-actions/load-used-actions/commit/49ad9cd702dec23ee747f38d5381a3faaca287b0) |
-| v1.3.7 | [`v1.3.7`](https://github.com/chainguard-actions/devops-actions-load-used-actions/tree/v1.3.7) | [`27b602a`](https://github.com/devops-actions/load-used-actions/commit/27b602a4855fe63cd2a578195d2949ab67146dcc) |
+Used for inserting data into the [internal actions marketplace](https://github.com/rajbos/actions-marketplace).
+
+## Example usage
+Minimal uses expression to use this action:
+
+``` yaml
+uses: devops-actions/load-used-actions@v1.3.7
+with: 
+    PAT: ${{ secrets.GITHUB_TOKEN }} # use an Access Token with correct permissions to view private repos if you need to
+```
+Note: the default GITHUB_TOKEN might only have read access to the current repository but can read the public repositories for any organization, depending on the specific setup of the GITHUB_TOKEN. Create a new access token (PAT or use a GitHub App) with `repo` scope to have full read-only access to the organization and use that as a parameter. To learn more about these types of tokens, read this [blogpost](https://devopsjournal.io/blog/2022/01/03/GitHub-Tokens).
+
+### Using a GitHub App (recommended)
+Using a [GitHub App](https://docs.github.com/en/apps/creating-github-apps) is preferred over a Personal Access Token (PAT) because:
+- **Scoped permissions**: A GitHub App can be granted only the permissions it needs, rather than broad `repo` scope.
+- **No user dependency**: Tokens are not tied to a personal account, so they won't break if someone leaves the organization.
+- **Higher rate limits**: GitHub Apps have higher API rate limits than PATs.
+
+You can use an action like [actions/create-github-app-token](https://github.com/actions/create-github-app-token) to generate a short-lived token from your GitHub App:
+
+``` yaml
+jobs:
+  load-all-used-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - uses: devops-actions/load-used-actions@v1.3.7
+        name: Load used actions        
+        id: load-actions
+        with: 
+          PAT: ${{ steps.app-token.outputs.token }}
+
+      - name: Upload result file as artefact
+        uses: actions/upload-artifact@v4
+        with: 
+          name: actions-file
+          path: ${{ steps.load-actions.outputs.actions-file }}
+```
+
+## Full example
+This example shows how to use the action to get a json file with all the used actions in an organization. The json file is uploaded as an artefact in the third step.
+
+|#|Name|Description|
+|---|---|---|
+|1|Load used actions|Run this action to load all actions used in an organization. Note the id of this step|
+|2a|Store json file|Output the json value from the output of the action in step 1, by using the id of step 1 in `${{ steps.<step id>.outputs.actions }}`. Do note that this can be a string that is to long to fit in the Actions runtime!|
+|2b|Use json file|File that has the json value from the output of the action in step 1, by using the id of step 1 in `${{ steps.<step id>.outputs.actions-file }}`.|
+|3|Upload result file as artefact|Upload the json file as an artefact|
+
+
+``` yaml
+jobs:
+  load-all-used-actions:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: devops-actions/load-used-actions@v1.3.7
+        name: Load used actions        
+        id: load-actions
+        with: 
+          PAT: ${{ secrets.GITHUB_TOKEN }} # use an Access Token with correct permissions to view private repos if you need to
+
+      - shell: pwsh        
+        name: Show json file
+        run: cat ${{ steps.load-actions.outputs.actions-file }}
+            
+      - name: Upload result file as artefact
+        uses: actions/upload-artifact@v4
+        with: 
+          name: actions-file
+          path: ${{ steps.load-actions.outputs.actions-file }}
+```
+
+## Inputs
+|Name|Description|Required|Default|
+|---|---|---|---|
+|organization|The name of the organization to run on.|No|Current organization|
+|PAT|The Personal Access Token (or GitHub App token) to use for the API calls.|Yes|-|
+|include-archived-repositories|Include archived repositories in the scan. Set to `false` to skip them.|No|`true`|
+
+## Outputs
+actions-file: path to file containing compressed json string with all the actions used in the workflows in the organization. The json is in the format:
+``` json
+[
+    "actionLink": "actions/checkout",
+    "count": 50,
+    "workflows": [
+        {
+            "repo": "rajbos/actions-marketplace",
+            "workflowFileName": "build-image.yml",
+            "actionRef": "v3" # the 'version' of the reference being used, if any
+            "actionVersionComment": null # the comment after the version, if any
+        },
+        {
+            "repo": "rajbos/actions-marketplace",
+            "workflowFileName": "build-image.yml",
+            "actionRef": "6167776d96bd5da05da534aa9cea6d7c786c1c5a", # the 'version' of the reference being used, if any
+            "actionVersionComment": "v3" # the comment after the 'version', if any
+        },
+        { "etc" : "--" }
+    ]
+]
+```
+Properties:
+|Name|Description|
+|----|-----------|
+|actionLink|The link to the action used in the workflow|
+|count|The number of times the action was used in the workflow|
+|workflows|An array of workflows that used the action|
+
+The workflow object has the following properties:
+|Name|Description|
+|----|-----------|
+|repo|The name of the repository that uses the action|
+|workflowFileName|The name of the workflow file that was found in the directory `.github/workflows/`|
+|actionRef| The 'version' of the reference being used, if any|
+|actionVersionComment| The comment after the  version', if any|
+
+## Container Images Output
+`container-images-file`: path to a JSON file listing all container images referenced in workflows. This includes:
+- Job-level `container` images
+- Service/sidecar container images
+- Steps using `docker://` references
+
+The JSON format is the same as the actions file, with `type` set to `"container-image"` and `actionLink` containing the image reference.
+
+# Testing / running the code locally
+To run this code locally, execute the `entrypoint.ps1` script in the `Src/PowerShell` folder, and sent in the PAT and organization you want to use.
 
 ## Privacy
 

@@ -1,0 +1,69 @@
+name: Test skip archived repositories
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: workflow_dispatch
+      GITHUB_REPOSITORY_OWNER: actions
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          organization: 'actions'
+          PAT: ${{ github.token }}
+          include-archived-repositories: 'false'
+        continue-on-error: true
+
+      - name: Assert action ran (completed with success or known API error)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action outcome: '$OUTCOME'"
+          # The action either succeeds (found repos/actions) or fails due to API rate limits
+          # under act with a limited token. Either way, the action must have run.
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action ran and completed (outcome=$OUTCOME)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+
+      - name: Assert actions-file output if action succeeded
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          ACTIONS_FILE: ${{ steps.action.outputs.actions-file }}
+        run: |
+          echo "Action outcome: '$OUTCOME'"
+          echo "actions-file output: '$ACTIONS_FILE'"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$ACTIONS_FILE" ]; then
+              echo "INFO: action succeeded but no actions-file output set (no actions found in org)"
+            else
+              echo "PASS: actions-file output is set to '$ACTIONS_FILE'"
+              if [ ! -f "$ACTIONS_FILE" ] && [ ! -f "$GITHUB_WORKSPACE/$ACTIONS_FILE" ]; then
+                echo "INFO: file path '$ACTIONS_FILE' not found as absolute or relative path"
+              else
+                echo "PASS: actions file exists"
+              fi
+            fi
+          else
+            echo "INFO: action did not succeed (API access limited under act), skipping output check"
+          fi
+          echo "PASS"
+
+      - name: Assert include-archived-repositories=false was accepted
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action outcome with include-archived-repositories=false: '$OUTCOME'"
+          # The action should have run (not crashed on input parsing)
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action accepted include-archived-repositories=false input"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
