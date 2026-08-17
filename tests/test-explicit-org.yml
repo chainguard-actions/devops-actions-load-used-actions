@@ -1,4 +1,4 @@
-name: Test basic usage - load used actions
+name: Test explicit organization input
 on:
   workflow_dispatch:
 jobs:
@@ -10,8 +10,8 @@ jobs:
       - id: action
         uses: .
         with:
+          organization: ${{ github.repository_owner }}
           PAT: ${{ github.token }}
-        # organization is left empty so it defaults to GITHUB_REPOSITORY_OWNER
 
       - name: Assert actions-file output is set
         env:
@@ -23,6 +23,17 @@ jobs:
             exit 1
           fi
           echo "PASS: actions-file output is set to '$ACTIONS_FILE'"
+
+      - name: Assert output file name is used-actions.json
+        env:
+          ACTIONS_FILE: ${{ steps.action.outputs.actions-file }}
+        run: |
+          echo "actions-file value: $ACTIONS_FILE"
+          if [ "$ACTIONS_FILE" != "used-actions.json" ]; then
+            echo "FAIL: expected actions-file to be 'used-actions.json' but got '$ACTIONS_FILE'"
+            exit 1
+          fi
+          echo "PASS: actions-file is 'used-actions.json'"
 
       - name: Assert output file exists in workspace
         env:
@@ -36,23 +47,19 @@ jobs:
           fi
           echo "PASS: output file exists at '$FULL_PATH'"
 
-      - name: Assert output file is valid JSON
+      - name: Assert output file content is valid JSON
         env:
           ACTIONS_FILE: ${{ steps.action.outputs.actions-file }}
         run: |
           FULL_PATH="$GITHUB_WORKSPACE/$ACTIONS_FILE"
-          echo "Validating JSON content of: $FULL_PATH"
           CONTENT=$(cat "$FULL_PATH")
-          echo "File content: $CONTENT"
-          # The file should be valid JSON (array or null/empty)
-          if ! echo "$CONTENT" | python3 -c "import sys, json; json.load(sys.stdin)" 2>/dev/null; then
-            # It might be an empty string or null - that's also acceptable when no actions found
-            if [ -z "$CONTENT" ] || [ "$CONTENT" = "null" ]; then
-              echo "PASS: file is empty/null (no actions found)"
-            else
-              echo "FAIL: file content is not valid JSON: $CONTENT"
-              exit 1
-            fi
-          else
+          echo "File content (first 500 chars): ${CONTENT:0:500}"
+          # The file should be valid JSON (array, object, or null when no actions found)
+          if echo "$CONTENT" | python3 -c "import sys, json; json.load(sys.stdin)" 2>/dev/null; then
             echo "PASS: file contains valid JSON"
+          elif [ -z "$CONTENT" ] || [ "$CONTENT" = "null" ]; then
+            echo "PASS: file is empty/null (no actions found in org)"
+          else
+            echo "FAIL: file content is not valid JSON: $CONTENT"
+            exit 1
           fi
