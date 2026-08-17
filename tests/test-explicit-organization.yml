@@ -1,4 +1,4 @@
-name: Test basic usage - load used actions
+name: Test explicit organization input
 on:
   workflow_dispatch:
 jobs:
@@ -39,7 +39,7 @@ jobs:
             fi
             echo "PASS: actions file exists and is valid JSON array"
           else
-            echo "PASS: action completed (no actions found in org repos, or org has no repos with workflow files)"
+            echo "PASS: action completed (no actions found in org repos)"
           fi
 
           # If container-images-file is set, verify it too
@@ -59,4 +59,4 @@ jobs:
             echo "PASS: container images file exists and is valid JSON array"
           fi
 
-          echo "PASS: action completed successfully"
+          echo "PASS: action completed successfully with explicit organization='octocat'"

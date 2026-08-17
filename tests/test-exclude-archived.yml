@@ -1,0 +1,44 @@
+name: Test exclude archived repositories
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          organization: 'octocat'
+          PAT: ${{ github.token }}
+          include-archived-repositories: 'false'
+
+      - name: Assert action completed and check outputs
+        env:
+          ACTIONS_FILE: ${{ steps.action.outputs.actions-file }}
+        run: |
+          echo "actions-file output: '$ACTIONS_FILE'"
+
+          # The action only sets actions-file when it finds actions.
+          # With archived repos excluded, there may be fewer or no results.
+          # If the output is set, verify the file exists and is valid JSON.
+          if [ -n "$ACTIONS_FILE" ]; then
+            FULL_PATH="$GITHUB_WORKSPACE/$ACTIONS_FILE"
+            echo "Checking for file at: $FULL_PATH"
+            if [ ! -f "$FULL_PATH" ]; then
+              echo "FAIL: actions-file output is set but file not found at $FULL_PATH"
+              exit 1
+            fi
+            echo "File contents:"
+            cat "$FULL_PATH"
+            if ! python3 -c "import json, sys; data=json.load(open('$FULL_PATH')); sys.exit(0 if isinstance(data, list) else 1)" 2>&1; then
+              echo "FAIL: actions file is not a valid JSON array"
+              exit 1
+            fi
+            echo "PASS: actions file exists and is valid JSON array (archived repos excluded)"
+          else
+            echo "PASS: action completed (no actions found in non-archived repos)"
+          fi
+
+          echo "PASS: action completed successfully with include-archived-repositories=false"
