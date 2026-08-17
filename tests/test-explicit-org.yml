@@ -1,4 +1,4 @@
-name: Test basic usage - load used actions with default org
+name: Test explicit organization input
 on:
   workflow_dispatch:
 jobs:
@@ -11,8 +11,8 @@ jobs:
         uses: .
         continue-on-error: true
         with:
-          # Leave organization empty to use GITHUB_REPOSITORY_OWNER
-          organization: ''
+          # Explicitly pass the organization (same as the repo owner)
+          organization: ${{ github.repository_owner }}
           PAT: ${{ github.token }}
 
       - name: Check action outcome and validate outputs
@@ -47,7 +47,6 @@ jobs:
           else
             # Action failed: this is acceptable when the token has limited org access
             # or when the org has no repos with workflow files using actions.
-            # Verify the failure is a known/expected failure mode (not a crash).
             echo "Action did not succeed (outcome=$OUTCOME). This is acceptable when:"
             echo "  - The GITHUB_TOKEN does not have org-level repo listing access"
             echo "  - The org has no repos with workflow files using GitHub Actions"
