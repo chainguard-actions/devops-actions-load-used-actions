@@ -1,0 +1,33 @@
+# action.yml
+name: 'Load used actions'
+author: 'Rob Bos'
+description: 'Load an overview of all used actions in a GitHub Organization (or user account)'
+branding:
+  icon : download
+  color: orange
+inputs:
+  organization:
+    description: 'Slug of the organization to analyze. Leave empty for current organization'
+    required: false
+  PAT:
+    description: 'Personal access token to use for analysis. Leaving this empty will use the default GITHUB_TOKEN that could have limited access rights'
+    required: true
+  include-archived-repositories:
+    description: 'Include archived repositories in the scan. Set to false to skip archived repos (which have Actions disabled)'
+    required: false
+    default: 'true'
+outputs:
+  actions-file:
+    description: 'Location of the file containing the list of all actions used in the organization'
+  container-images-file:
+    description: 'Location of the file containing the list of all container images used in workflows (job containers, services, and docker:// step references)'
+runs:
+  using: 'node24'
+  main: 'dist/index.js'
+  # Previous Docker-based config (kept for reference):
+  # using: 'docker'
+  # image: 'Dockerfile'
+  # args:
+  #   - '${{ inputs.organization }}'
+  #   - '${{ inputs.PAT }}'
+  #   - '${{ inputs.include-archived-repositories }}'

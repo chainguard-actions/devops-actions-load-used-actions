@@ -1,0 +1,47 @@
+name: Test basic org scan
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          organization: devops-actions
+          PAT: ${{ github.token }}
+      - name: Assert actions-file output and content
+        env:
+          ACTUAL: ${{ steps.action.outputs.actions-file }}
+        run: |
+          echo "actions-file: $ACTUAL"
+          if [ "$ACTUAL" != "used-actions.json" ]; then
+            echo "FAIL: expected 'used-actions.json'"
+            exit 1
+          fi
+          F="$GITHUB_WORKSPACE/$ACTUAL"
+          if [ ! -s "$F" ]; then
+            echo "FAIL: $F missing or empty"
+            exit 1
+          fi
+          head -c 1000 "$F"; echo
+          node -e '
+            const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            if (!Array.isArray(d) || d.length === 0) { console.log("FAIL: not a non-empty array"); process.exit(1); }
+            console.log("entries: " + d.length);
+          ' "$F"
+          echo "PASS"
+      - name: Assert container-images-file if set
+        env:
+          ACTUAL: ${{ steps.action.outputs.container-images-file }}
+        run: |
+          echo "container-images-file: $ACTUAL"
+          if [ -n "$ACTUAL" ]; then
+            if [ "$ACTUAL" != "container-images.json" ] || [ ! -s "$GITHUB_WORKSPACE/$ACTUAL" ]; then
+              echo "FAIL: unexpected container-images-file"
+              exit 1
+            fi
+            node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(d)) process.exit(1);' "$GITHUB_WORKSPACE/$ACTUAL"
+          fi
+          echo "PASS"

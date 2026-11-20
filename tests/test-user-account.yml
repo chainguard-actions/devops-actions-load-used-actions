@@ -1,0 +1,41 @@
+name: Test user account fallback
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Remove any stale output file
+        run: rm -f "$GITHUB_WORKSPACE/used-actions.json" "$GITHUB_WORKSPACE/container-images.json"
+      # octocat is a user (not an org): the org lookup 404s and the action falls back to user repos
+      - id: action
+        uses: .
+        with:
+          organization: octocat
+          PAT: ${{ github.token }}
+      - name: Assert step succeeded and output (if any) is valid
+        env:
+          ACTUAL: ${{ steps.action.outputs.actions-file }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "actions-file: $ACTUAL"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected success"
+            exit 1
+          fi
+          if [ -n "$ACTUAL" ]; then
+            if [ "$ACTUAL" != "used-actions.json" ]; then
+              echo "FAIL: unexpected file name"
+              exit 1
+            fi
+            node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(d)||d.length===0){console.log("FAIL: bad content");process.exit(1);}' "$GITHUB_WORKSPACE/$ACTUAL"
+          else
+            echo "No actions found for user (acceptable); verifying no file was written"
+            if [ -f "$GITHUB_WORKSPACE/used-actions.json" ]; then
+              echo "FAIL: file written without output being set"
+              exit 1
+            fi
+          fi
+          echo "PASS"
